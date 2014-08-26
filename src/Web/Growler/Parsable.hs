@@ -1,10 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Web.Growler.Parsable where
-import qualified Data.ByteString.Char8   as BS
-import qualified Data.Text               as T
-import qualified Data.Text.Encoding      as T
-import qualified Data.Text.Lazy          as TL
-import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text             as T
+import qualified Data.Text.Encoding    as T
+import qualified Data.Text.Lazy        as TL
 
 -- | Minimum implemention: 'parseParam'
 class Parsable a where
