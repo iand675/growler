@@ -75,7 +75,7 @@ growl trans fb g = do
 growler :: MonadIO m => (forall a. m a -> IO a) -> HandlerT m () -> GrowlerT m () -> IO Application
 growler trans fallback (GrowlerT m) = do
   result <- trans $ execStateT m []
-  return $ app (result ^. vector)
+  return $ app (reverse result ^. vector)
   where
     app rv req respond = trans (growlerRouter rv fallback req) >>= respond
 
