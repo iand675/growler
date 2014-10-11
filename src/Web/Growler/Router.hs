@@ -42,7 +42,7 @@ import qualified Network.Wai.Parse          as Parse
 import qualified Text.Regex                 as Regex
 
 import           Web.Growler.Handler
-import           Web.Growler.Types
+import           Web.Growler.Types          hiding (status)
 
 -- | get = 'addroute' 'GET'
 get :: (MonadIO m) => RoutePattern -> HandlerT m () -> GrowlerT m ()
@@ -98,7 +98,7 @@ route req method pat = if Right method == parseMethod (requestMethod req)
 matchRoute :: RoutePattern -> Request -> Maybe [Param]
 matchRoute (Literal pat)  req | pat == path req = Just []
                               | otherwise       = Nothing
-matchRoute (Function fun) req = fun req
+matchRoute (Function _ fun) req = fun req
 matchRoute (Capture pat)  req = go (T.split (== '/') pat) (T.split (== '/') $ path req) []
     where go [] [] prs = Just prs -- request string and pattern match!
           go [] r  prs | T.null (mconcat r)  = Just prs -- in case request has trailing slashes
@@ -130,7 +130,7 @@ parseEncodedParams bs = [ (T.encodeUtf8 k, T.encodeUtf8 $ fromMaybe "" v) | (k,v
 -- Capture: oo/ba
 --
 regex :: String -> RoutePattern
-regex pattern = Function $ \ req -> fmap (map (B.pack . show *** (T.encodeUtf8 . T.pack)) . zip [0 :: Int ..] . strip)
+regex pattern = Function (const $ T.pack pattern) $ \ req -> fmap (map (B.pack . show *** (T.encodeUtf8 . T.pack)) . zip [0 :: Int ..] . strip)
                                          (Regex.matchRegexAll rgx $ T.unpack $ path req)
     where rgx = Regex.mkRegex pattern
           strip (_, match, _, subs) = match : subs
@@ -162,7 +162,7 @@ capture = fromString
 -- >>> curl http://localhost:3000/
 -- HTTP/1.1
 --
-function :: (Request -> Maybe [Param]) -> RoutePattern
+function :: (Request -> T.Text) -> (Request -> Maybe [Param]) -> RoutePattern
 function = Function
 
 -- | Build a route that requires the requested path match exactly, without captures.

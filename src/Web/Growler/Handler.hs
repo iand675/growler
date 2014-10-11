@@ -1,58 +1,60 @@
+{-# LANGUAGE Rank2Types        #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Web.Growler.Handler where
 import           Control.Applicative
 import           Control.Lens
-import           Control.Monad.Cont
 import           Control.Monad.RWS
 import           Control.Monad.Trans
+import           Control.Monad.Trans.Either
 import qualified Control.Monad.State as State
 import qualified Control.Monad.State.Strict as ST
 import           Data.Aeson                hiding ((.=))
 import qualified Data.ByteString.Char8     as C
-import Data.CaseInsensitive
-import Data.Maybe
+import           Data.CaseInsensitive
+import           Data.Maybe
 import qualified Data.HashMap.Strict       as HM
 import qualified Data.ByteString.Lazy.Char8 as L
-import Data.Text as T
-import Data.Text.Encoding as T
-import Data.Text.Lazy as TL
+import           Data.Text as T
+import           Data.Text.Encoding as T
+import           Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import           Network.HTTP.Types.Status
 import           Network.Wai
-import Network.Wai.Parse hiding (Param)
-import Network.HTTP.Types
-import           Web.Growler.Types
+import           Network.Wai.Parse hiding (Param)
+import           Network.HTTP.Types
+import           Web.Growler.Types hiding (status, request, params)
+import qualified Web.Growler.Types as L
 import Pipes.Wai
 import Pipes.Aeson
 
 initialState :: ResponseState
-initialState = (ok200, HM.empty, LBSSource "")
+initialState = ResponseState ok200 HM.empty (LBSSource "")
 
 currentResponse :: Monad m => HandlerT m ResponseState
 currentResponse = HandlerT State.get
 
 abort :: Monad m => ResponseState -> HandlerT m ()
-abort rs = do
-  (q, _, _) <- HandlerT ask
-  HandlerT $ lift $ q rs
+abort rs = HandlerT $ lift $ left rs
 
 status :: Monad m => Status -> HandlerT m ()
-status v = HandlerT $ _1 .= v
+status v = HandlerT $ L.status .= v
 
 addHeader :: Monad m => CI C.ByteString -> C.ByteString -> HandlerT m ()
-addHeader k v = HandlerT (_2 %= HM.insertWith (\_ v' -> v:v') k [v])
+addHeader k v = HandlerT (L.headers %= HM.insertWith (\_ v' -> v:v') k [v])
 
 setHeader :: Monad m => CI C.ByteString -> C.ByteString -> HandlerT m ()
-setHeader k v = HandlerT (_2 %= HM.insert k [v])
+setHeader k v = HandlerT (L.headers %= HM.insert k [v])
 
 body :: Monad m => BodySource -> HandlerT m ()
-body = HandlerT . (_3 .=)
+body = HandlerT . (bodySource .=)
 
 json :: Monad m => ToJSON a => a -> HandlerT m ()
-json = body . LBSSource . encode
+json x = do
+  body $ LBSSource $ encode x
+  addHeader "Content-Type" "application/json"
 
 file :: Monad m => FilePath -> Maybe FilePart -> HandlerT m ()
-file fpath fpart = HandlerT (_3 .= FileSource (fpath, fpart))
+file fpath fpart = HandlerT (bodySource .= FileSource (fpath, fpart))
 
 formData :: MonadIO m => BackEnd y -> HandlerT m ([(C.ByteString, C.ByteString)], [File y])
 formData b = do
@@ -79,10 +81,10 @@ jsonData = do
 -- param :: 
 
 params :: Monad m => HandlerT m [Param]
-params = HandlerT (view _3)
+params = HandlerT (view L.params)
 
 raw :: Monad m => L.ByteString -> HandlerT m ()
-raw bs = HandlerT (_3 .= LBSSource bs)
+raw bs = HandlerT (bodySource .= LBSSource bs)
 
 redirect :: Monad m => T.Text -> HandlerT m ()
 redirect url = do
@@ -91,10 +93,10 @@ redirect url = do
   currentResponse >>= abort
 
 request :: Monad m => HandlerT m Request
-request = HandlerT $ view _2
+request = HandlerT $ view $ L.request
 
 stream :: Monad m => StreamingBody -> HandlerT m ()
-stream s = HandlerT (_3 .= StreamSource s)
+stream s = HandlerT (bodySource .= StreamSource s)
 
 text :: Monad m => TL.Text -> HandlerT m ()
 text t = do
@@ -106,8 +108,23 @@ html t = do
   setHeader hContentType "text/html; charset=utf-8"
   raw $ TL.encodeUtf8 t
 
-runHandler :: Monad m => ResponseState -> Request -> [Param] -> HandlerT m a -> m ResponseState
-runHandler rs rq ps m = runContT runInner return
+routePattern :: Monad m => HandlerT m (Maybe RoutePattern)
+routePattern = HandlerT $ view $ L.matchedPattern
+
+runHandler :: Monad m => ResponseState -> Maybe RoutePattern -> Request -> [Param] -> HandlerT m a -> m (Either ResponseState (a, ResponseState))
+runHandler rs pat rq ps m = runEitherT $ do
+  (dx, r, ()) <- runRWST (fromHandler m) (RequestState pat (qsParams ++ ps) rq) rs
+  return (dx, r)
   where
     qsParams = fmap (_2 %~ fromMaybe "") (queryString rq) 
-    runInner = callCC $ \e -> fst <$> execRWST (fromHandler m >> Control.Monad.RWS.get) (e, rq, qsParams ++ ps) rs
+
+liftAround :: (Monad m) => (forall a. m a -> m a) -> HandlerT m a -> HandlerT m a
+liftAround f m = HandlerT $ do
+  (RequestState pat ps req) <- ask
+  currentState <- get
+  r <- lift $ lift $ f $ runHandler currentState pat req ps m
+  case r of
+    Left err -> lift $ left err
+    Right (dx, state') -> do
+      put state'
+      return dx 
