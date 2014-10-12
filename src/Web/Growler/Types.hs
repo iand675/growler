@@ -6,6 +6,7 @@
 {-# LANGUAGE FunctionalDependencies     #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE OverloadedStrings          #-}
 module Web.Growler.Types where
 import           Blaze.ByteString.Builder  (Builder)
 import           Control.Applicative
@@ -21,19 +22,58 @@ import qualified Data.ByteString.Char8       as C
 import qualified Data.ByteString.Lazy        as L
 import qualified Data.CaseInsensitive        as CI
 import qualified Data.HashMap.Strict         as HM
+import           Data.Monoid
 import           Data.String                 (IsString (..))
 import           Data.Text                   (Text, pack)
+import qualified Data.Text                   as T
+import qualified Data.Text.Encoding          as T
 import           Network.HTTP.Types.Header
 import           Network.HTTP.Types.Method
 import           Network.HTTP.Types.Status
 import           Network.Wai
 
-data RoutePattern = Capture  Text
-                  | Literal  Text
-                  | Function (Request -> Text) (Request -> Maybe [Param])
+data MatchResult = Fail | Partial [Param] | Complete [Param]
+  deriving (Show, Eq)
+
+newtype RoutePattern = RoutePattern { runRoutePattern :: Request -> (Text, Request, MatchResult) }
+
+instance Monoid MatchResult where
+  mappend l r = case l of
+    Fail -> Fail
+    Partial lps -> case r of
+      Fail -> Fail
+      Partial rps -> Partial (lps <> rps)
+      Complete rps -> Complete (lps <> rps)
+    Complete lps -> Fail
+  mempty = Partial []
+
+instance Monoid RoutePattern where
+  mappend (RoutePattern a) (RoutePattern b) = RoutePattern $ \r -> let (t1, r', p1) = a r in
+                                                                   let (t2, r'', p2) = b r' in
+                                                                     (t1 <> t2, r'', p1 <> p2)
+  mempty = RoutePattern $ \r -> ("", r, Partial [])
 
 instance IsString RoutePattern where
-    fromString = Capture . pack
+  fromString = capture . T.pack
+
+path :: Request -> T.Text
+path = T.cons '/' . T.intercalate "/" . pathInfo
+
+capture :: Text -> RoutePattern
+capture pat = RoutePattern process
+  where 
+    process req = (pat, req { pathInfo = ss }, res)
+      where
+        (res, ss) = go (T.split (== '/') pat) (T.split (== '/') $ path req) []
+        go [] [] prs = (Complete prs, []) -- request string and pattern match!
+        go [] r  prs | T.null (mconcat r)  = (Complete prs, []) -- in case request has trailing slashes
+                     | otherwise           = (Partial prs, r)  -- request string is longer than pattern
+        go p  [] prs | T.null (mconcat p)  = (Complete prs, []) -- in case pattern has trailing slashes
+                     | otherwise           = (Fail, [])         -- request string is not long enough
+        go (p:ps) (r:rs) prs | p == r          = go ps rs prs -- equal literals, keeping checking
+                             | T.null p        = (Fail, [])         -- p is null, but r is not, fail
+                             | T.head p == ':' = go ps rs $ (T.encodeUtf8 $ T.tail p, T.encodeUtf8 r) : prs -- p is a capture, add to params
+                             | otherwise       = (Fail, [])     -- both literals, but unequal, fail
 
 type Param = (C.ByteString, C.ByteString)
 
@@ -101,7 +141,7 @@ instance MonadBaseControl b m => MonadBaseControl b (HandlerT m) where
 
 type Handler = HandlerT IO
 
-newtype GrowlerT m a = GrowlerT { fromGrowlerT :: StateT [(StdMethod, RoutePattern, HandlerT m ())] m a}
+newtype GrowlerT m a = GrowlerT { fromGrowlerT :: StateT [(StdMethod, RoutePattern, HandlerT m ())] m a }
 
 instance Functor m => Functor (GrowlerT m) where
   fmap f (GrowlerT m) = GrowlerT (fmap f m)

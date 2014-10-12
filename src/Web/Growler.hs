@@ -65,7 +65,7 @@ import qualified Network.Wai.Handler.Warp  as Warp
 import           Web.Growler.Handler
 import           Web.Growler.Parsable
 import           Web.Growler.Router
-import           Web.Growler.Types         hiding (status, headers, params, request)
+import           Web.Growler.Types         hiding (status, headers, params, request, capture)
 
 growl :: MonadIO m => (forall a. m a -> IO a) -> HandlerT m () -> GrowlerT m () -> IO ()
 growl trans fb g = do
