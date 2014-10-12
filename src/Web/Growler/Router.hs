@@ -25,6 +25,7 @@ module Web.Growler.Router
 import           Control.Arrow              ((***))
 
 import           Control.Monad.State        hiding (get, put)
+import qualified Control.Monad.State        as S
 import           Control.Monad.Trans
 
 import qualified Data.ByteString.Char8      as B
@@ -48,8 +49,13 @@ import           Web.Growler.Types          hiding (status, capture)
 
 mount :: Monad m => RoutePattern -> GrowlerT m () -> GrowlerT m ()
 mount pat m = GrowlerT $ do
+  previous <- S.get
+  -- create inner scope that doesn't affect external routes
+  S.put []
   fromGrowlerT m
-  modify (fmap $ \(m, p, h) -> (m, pat <> p, h))
+  modify' (fmap $ \(m, p, h) -> (m, pat <> p, h))
+  new <- S.get
+  S.put (new ++ previous)
 
 -- | get = 'addroute' 'GET'
 get :: (MonadIO m) => RoutePattern -> HandlerT m () -> GrowlerT m ()
