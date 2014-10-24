@@ -20,8 +20,7 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:   Web.Growler
-  other-modules:     Web.Growler.Handler, Web.Growler.Parsable, Web.Growler.Router, Web.Growler.Types
+  exposed-modules:   Web.Growler, Web.Growler.Handler, Web.Growler.Parsable, Web.Growler.Router, Web.Growler.Types
   other-extensions:    OverloadedStrings, FlexibleContexts, FlexibleInstances, LambdaCase, RankNTypes, ScopedTypeVariables
   build-depends:       base >=4.7 && <4.8, lens >=4.4 && <5, mtl >=2.2 && <3, bytestring >=0.10 && <0.20, http-types >=0.8 && <1, text >=1.1 && <2, wai >=3.0 && <4, wai-extra >=3.0 && <4, regex-compat >=0.95 && <1, blaze-builder >=0.3 && <0.7, unordered-containers >=0.2 && <0.9, aeson, vector, case-insensitive, warp, pipes, pipes-aeson, pipes-wai, monad-control, either >= 4.3.1, transformers-base
   hs-source-dirs:      src

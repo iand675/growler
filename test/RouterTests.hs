@@ -10,10 +10,10 @@ import Web.Growler.Types (GrowlerT(..))
 import Network.HTTP.Types
 import Network.Wai.Internal
 
-testRoute = Request "GET" http11 "/api/v1/users/2" "" [] False undefined ["api", "v1", "users", "2"] [] (return "") undefined ChunkedBody Nothing Nothing
+testRoute = Request "GET" http11 "/api/v1/users" "" [] False undefined ["api", "v1", "users"] [] (return "") undefined ChunkedBody Nothing Nothing
 
 pat :: GrowlerT IO ()
-pat = mount (literal "/api") $ mount "/:version" $ get "/users/:uid" $ (text "win")
+pat = mount (literal "/api") $ mount "/:version/users" $ get "/api" $ (text "win")
 
 test = do
   [(_, p, _)] <- execStateT (fromGrowlerT pat) []

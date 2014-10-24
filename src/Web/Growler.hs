@@ -21,6 +21,8 @@ module Web.Growler
 , capture
 , function
 , literal
+, mount
+, handlerHook
 -- ** Handlers
 , Handler
 , HandlerT
@@ -94,5 +96,5 @@ growlerRouter rv fb r = do
   where
     processResponse (m, pat, respond) = case route r m pat of
       Nothing -> Nothing
-      Just ps -> Just $ runHandler initialState (Just pat) r ps respond
+      Just (patRep, ps) -> Just $ runHandler initialState (Just patRep) r ps respond
 

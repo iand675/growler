@@ -44,7 +44,9 @@ instance Monoid MatchResult where
       Fail -> Fail
       Partial rps -> Partial (lps <> rps)
       Complete rps -> Complete (lps <> rps)
-    Complete lps -> Fail
+    Complete lps -> case r of
+      Complete rps -> Complete (lps <> rps)
+      _ -> Fail
   mempty = Partial []
 
 instance Monoid RoutePattern where
@@ -57,7 +59,12 @@ instance IsString RoutePattern where
   fromString = capture . T.pack
 
 path :: Request -> T.Text
-path = T.cons '/' . T.intercalate "/" . pathInfo
+path r = case front of
+  Just ('/', _) -> full
+  _ -> T.cons '/' full
+  where
+    full = T.intercalate "/" $ pathInfo r
+    front = T.uncons full
 
 capture :: Text -> RoutePattern
 capture pat = RoutePattern process
@@ -84,7 +91,7 @@ data BodySource = FileSource !(FilePath, Maybe FilePart)
                 | RawSource !(IO C.ByteString -> (C.ByteString -> IO ()) -> IO ()) !Response
 
 data RequestState = RequestState
-  { requestMatchedPattern :: Maybe RoutePattern
+  { requestMatchedPattern :: Maybe T.Text
   , requestParams         :: [Param]
   , requestRequest        :: Request
   }

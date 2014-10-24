@@ -19,6 +19,7 @@ module Web.Growler.Router
     , mount
     , literal
     , route
+    , handlerHook
     , RoutePattern(..)
     ) where
 
@@ -56,6 +57,10 @@ mount pat m = GrowlerT $ do
   modify' (fmap $ \(m, p, h) -> (m, pat <> p, h))
   new <- S.get
   S.put (new ++ previous)
+
+
+handlerHook :: Monad m => (HandlerT m () -> HandlerT m ()) -> GrowlerT m ()
+handlerHook f = GrowlerT $ modify' (fmap $ \(m, p, h) -> (m, p, f h))
 
 -- | get = 'addroute' 'GET'
 get :: (MonadIO m) => RoutePattern -> HandlerT m () -> GrowlerT m ()
@@ -103,16 +108,16 @@ notFound = status status404
 addRoute :: (MonadIO m) => StdMethod -> RoutePattern -> HandlerT m () -> GrowlerT m ()
 addRoute method pat action = GrowlerT $ modify ((method, pat, action):)
 
-route :: Request -> StdMethod -> RoutePattern -> Maybe [Param]
+route :: Request -> StdMethod -> RoutePattern -> Maybe (T.Text, [Param])
 route req method pat = if Right method == parseMethod (requestMethod req)
   then matchRoute pat req
   else Nothing
 
-matchRoute :: RoutePattern -> Request -> Maybe [Param]
-matchRoute (RoutePattern p) req = let (_, _, rps) = p req in case rps of
+matchRoute :: RoutePattern -> Request -> Maybe (T.Text, [Param])
+matchRoute (RoutePattern p) req = let (pat, _, rps) = p req in case rps of
   Fail -> Nothing
   Partial _ -> Nothing
-  Complete ps -> Just ps
+  Complete ps -> Just (pat, ps)
 
 -- Pretend we are at the top level.
 parseEncodedParams :: B.ByteString -> [Param]

@@ -108,10 +108,10 @@ html t = do
   setHeader hContentType "text/html; charset=utf-8"
   raw $ TL.encodeUtf8 t
 
-routePattern :: Monad m => HandlerT m (Maybe RoutePattern)
+routePattern :: Monad m => HandlerT m (Maybe T.Text)
 routePattern = HandlerT $ view $ L.matchedPattern
 
-runHandler :: Monad m => ResponseState -> Maybe RoutePattern -> Request -> [Param] -> HandlerT m a -> m (Either ResponseState (a, ResponseState))
+runHandler :: Monad m => ResponseState -> Maybe T.Text -> Request -> [Param] -> HandlerT m a -> m (Either ResponseState (a, ResponseState))
 runHandler rs pat rq ps m = runEitherT $ do
   (dx, r, ()) <- runRWST (fromHandler m) (RequestState pat (qsParams ++ ps) rq) rs
   return (dx, r)
