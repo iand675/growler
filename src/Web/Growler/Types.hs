@@ -91,15 +91,15 @@ data BodySource = FileSource !(FilePath, Maybe FilePart)
                 | RawSource !(IO C.ByteString -> (C.ByteString -> IO ()) -> IO ()) !Response
 
 data RequestState = RequestState
-  { requestMatchedPattern :: Maybe T.Text
-  , requestParams         :: [Param]
-  , requestRequest        :: Request
+  { requestStateMatchedPattern :: Maybe T.Text
+  , requestStateParams         :: [Param]
+  , requestStateRequest        :: Request
   }
 
 data ResponseState = ResponseState
-  { responseStatus     :: !Status
-  , responseHeaders    :: !(HM.HashMap (CI.CI C.ByteString) [C.ByteString])
-  , responseBodySource :: !BodySource
+  { responseStateStatus     :: !Status
+  , responseStateHeaders    :: !(HM.HashMap (CI.CI C.ByteString) [C.ByteString])
+  , responseStateBodySource :: !BodySource
   }
 
 makeFields ''ResponseState
