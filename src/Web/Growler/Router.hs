@@ -12,7 +12,6 @@ module Web.Growler.Router
     , patch
     , addRoute
     , matchAny
-    , notFound
     , capture
     , regex
     , function
@@ -21,6 +20,8 @@ module Web.Growler.Router
     , route
     , handlerHook
     , RoutePattern(..)
+    , notFound
+    , internalServerError
     ) where
 
 import           Control.Arrow              ((***))

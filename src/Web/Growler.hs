@@ -23,6 +23,8 @@ module Web.Growler
 -- ** Running a growler app
   growl
 , growler
+, defaultConfig
+, GrowlerConfig (..)
 -- ** Routing
 , Growler
 , GrowlerT
@@ -84,6 +86,7 @@ module Web.Growler
 , ResponseState (..)
 , RoutePattern (..)
 ) where
+import           Control.Exception         (catch)
 import           Control.Lens              hiding (get)
 import           Control.Monad.Identity
 import           Control.Monad.State       hiding (get, put)
@@ -103,7 +106,7 @@ import           Web.Growler.Types         hiding (status, headers, params, requ
 
 -- | The simple approach to starting up a web server
 growl :: MonadIO m => (forall a. m a -> IO a) -- ^ A function to convert your base monad of choice into IO.
-                   -> HandlerT m ()           -- ^ The 404 not found handler. If no route matches, then this handler will be evaluated.
+                   -> GrowlerConfig m       
                    -> GrowlerT m ()           -- ^ The router for all the other routes
                    -> IO ()
 growl trans fb g = do
@@ -113,14 +116,23 @@ growl trans fb g = do
 
 -- | For more complex needs, access to the actual WAI 'Application'. Useful for adding middleware.
 growler :: MonadIO m => (forall a. m a -> IO a) -- ^ A function to convert your base monad of choice into IO.
-                     -> HandlerT m ()           -- ^ The 404 not found handler. If no route matches, then this handler will be evaluated.
+                     -> GrowlerConfig m
                      -> GrowlerT m ()           -- ^ The router for all the other routes
                      -> IO Application
-growler trans fallback (GrowlerT m) = do
+growler trans (GrowlerConfig nf er) (GrowlerT m) = do
   result <- trans $ execStateT m []
   return $ app (reverse result ^. vector)
   where
-    app rv req respond = trans (growlerRouter rv fallback req) >>= respond
+    app rv req respond = catch (trans (growlerRouter rv nf req) >>= respond) $ \e -> do
+      mr <- trans (runHandler initialState Nothing req [] (er e))
+      let (ResponseState status' groupedHeaders body') = either id snd mr
+      let headers = concatMap (\(k, vs) -> map (\v -> (k, v)) vs) $ HM.toList groupedHeaders
+      respond $ case body' of
+        FileSource fpath fpart    -> responseFile    status' headers fpath fpart
+        BuilderSource b           -> responseBuilder status' headers b
+        LBSSource lbs             -> responseLBS     status' headers lbs
+        StreamSource sb           -> responseStream  status' headers sb
+        RawSource f r'            -> responseRaw     f       r'
 
 growlerRouter :: forall m. MonadIO m => V.Vector (StdMethod, RoutePattern, HandlerT m ()) -> HandlerT m () -> Request -> m Response
 growlerRouter rv fb r = do
@@ -138,5 +150,7 @@ growlerRouter rv fb r = do
       Nothing -> Nothing
       Just (patRep, ps) -> Just $ runHandler initialState (Just patRep) r ps respond
 
-defaultConfig :: Monad m => GrowlerConfig m
-defaultConfig = GrowlerConfig notFound internalServerError
+defaultConfig :: MonadIO m => GrowlerConfig m
+defaultConfig = GrowlerConfig notFound $ \e -> do
+  liftIO $ print e
+  internalServerError

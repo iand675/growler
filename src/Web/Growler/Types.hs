@@ -10,6 +10,7 @@
 module Web.Growler.Types where
 import           Blaze.ByteString.Builder  (Builder)
 import           Control.Applicative
+import           Control.Exception
 import           Control.Lens.TH
 import           Control.Monad.Base (MonadBase(..), liftBaseDefault)
 import           Control.Monad.Reader
@@ -40,7 +41,7 @@ newtype RoutePattern = RoutePattern { runRoutePattern :: Request -> RoutePattern
 
 data RoutePatternResult = RoutePatternResult
   { routePatternResultName        :: !Text
-  , routePatternResultRequest     :: !Request
+  , routePatternResultRequest     :: !Request     -- ^ The (potentially) updated request after consuming a portion of the path
   , routePatternResultMatchResult :: !MatchResult
   }
 
@@ -176,6 +177,6 @@ data JsonInputError = RequestBodyExhausted
 
 data GrowlerConfig m = GrowlerConfig
   { growlerConfigNotFoundHandler :: HandlerT m () -- ^ The 404 not found handler. If no route matches, then this handler will be evaluated.
-  , growlerConfigErrorHandler    :: HandlerT m () -- ^ The uncaught exception handler. If an exception is thrown and not caught while trying to service a request, then this handler will be evaluated.
+  , growlerConfigErrorHandler    :: SomeException -> HandlerT m () -- ^ The uncaught exception handler. If an exception is thrown and not caught while trying to service a request, then this handler will be evaluated.
   }
 
