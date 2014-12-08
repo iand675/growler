@@ -11,7 +11,7 @@ eye towards performance, extensibility, and ease of use.
 > import Data.Monoid ((<>))
 > import Web.Growler
 >
-> main = growl return defaultConfig $ do
+> main = growl id defaultConfig $ do
 >   get "/" $ text "Hello, World!"
 >   get "/:name" $ do
 >     name <- param "name"
