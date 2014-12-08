@@ -62,23 +62,23 @@ mount pat m = GrowlerT $ do
 handlerHook :: Monad m => (HandlerT m () -> HandlerT m ()) -> GrowlerT m ()
 handlerHook f = GrowlerT $ modify' (fmap $ \(m, p, h) -> (m, p, f h))
 
--- | get = 'addroute' 'GET'
+-- | get = 'addRoute' 'GET'
 get :: (MonadIO m) => RoutePattern -> HandlerT m () -> GrowlerT m ()
 get = addRoute GET
 
--- | post = 'addroute' 'POST'
+-- | post = 'addRoute' 'POST'
 post :: (MonadIO m) => RoutePattern -> HandlerT m () -> GrowlerT m ()
 post = addRoute POST
 
--- | put = 'addroute' 'PUT'
+-- | put = 'addRoute' 'PUT'
 put :: (MonadIO m) => RoutePattern -> HandlerT m () -> GrowlerT m ()
 put = addRoute PUT
 
--- | delete = 'addroute' 'DELETE'
+-- | delete = 'addRoute' 'DELETE'
 delete :: (MonadIO m) => RoutePattern -> HandlerT m () -> GrowlerT m ()
 delete = addRoute DELETE
 
--- | patch = 'addroute' 'PATCH'
+-- | patch = 'addRoute' 'PATCH'
 patch :: (MonadIO m) => RoutePattern -> HandlerT m () -> GrowlerT m ()
 patch = addRoute PATCH
 
@@ -86,10 +86,13 @@ patch = addRoute PATCH
 matchAny :: (MonadIO m) => RoutePattern -> HandlerT m () -> GrowlerT m ()
 matchAny pattern action = mapM_ (\v -> addRoute v pattern action) [minBound..maxBound]
 
--- | Specify an action to take if nothing else is found. Note: this _always_ matches,
--- so should generally be the last route specified.
-notFound :: (MonadIO m) => HandlerT m ()
+-- | A blank 404 Not Found handler for convenience.
+notFound :: (Monad m) => HandlerT m ()
 notFound = status status404
+
+-- | A blank 500 Internal Server Error handler for convenience.
+internalServerError :: Monad m => HandlerT m ()
+internalServerError = status status500
 
 -- | Define a route with a 'StdMethod', 'T.Text' value representing the path spec,
 -- and a body ('Action') which modifies the response.
@@ -114,7 +117,7 @@ route req method pat = if Right method == parseMethod (requestMethod req)
   else Nothing
 
 matchRoute :: RoutePattern -> Request -> Maybe (T.Text, [Param])
-matchRoute (RoutePattern p) req = let (pat, _, rps) = p req in case rps of
+matchRoute (RoutePattern p) req = let (RoutePatternResult pat _ rps) = p req in case rps of
   Fail -> Nothing
   Partial _ -> Nothing
   Complete ps -> Just (pat, ps)
@@ -138,7 +141,7 @@ parseEncodedParams bs = [ (T.encodeUtf8 k, T.encodeUtf8 $ fromMaybe "" v) | (k,v
 regex :: String -> RoutePattern
 regex pattern = RoutePattern go
   where
-    go req = (T.pack pattern, req, maybe Fail Complete $ fmap convertParams match)
+    go req = RoutePatternResult (T.pack pattern) req $ maybe Fail Complete $ fmap convertParams match
       where
         rgx = Regex.mkRegex pattern
         strip (_, match, _, subs) = match : subs
@@ -173,13 +176,13 @@ capture = fromString
 -- HTTP/1.1
 --
 function :: (Request -> T.Text) -> (Request -> MatchResult) -> RoutePattern
-function fn fps = RoutePattern $ \r -> (fn r, r, fps r)
+function fn fps = RoutePattern $ \r -> RoutePatternResult (fn r) r (fps r)
 
 -- | Build a route that requires the requested path match exactly, without captures.
 literal :: String -> RoutePattern
 literal pat = RoutePattern go
   where
-    go req = (packed, req { pathInfo = req' }, result)
+    go req = RoutePatternResult packed (req { pathInfo = req' }) result
       where
         packed = T.pack pat
         (result, req') = case T.stripPrefix packed (path req) of

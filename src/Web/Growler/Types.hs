@@ -31,11 +31,18 @@ import           Network.HTTP.Types.Header
 import           Network.HTTP.Types.Method
 import           Network.HTTP.Types.Status
 import           Network.Wai
+import           Pipes.Aeson                 (DecodingError (..))
 
 data MatchResult = Fail | Partial [Param] | Complete [Param]
   deriving (Show, Eq)
 
-newtype RoutePattern = RoutePattern { runRoutePattern :: Request -> (Text, Request, MatchResult) }
+newtype RoutePattern = RoutePattern { runRoutePattern :: Request -> RoutePatternResult }
+
+data RoutePatternResult = RoutePatternResult
+  { routePatternResultName        :: !Text
+  , routePatternResultRequest     :: !Request
+  , routePatternResultMatchResult :: !MatchResult
+  }
 
 instance Monoid MatchResult where
   mappend l r = case l of
@@ -50,10 +57,10 @@ instance Monoid MatchResult where
   mempty = Partial []
 
 instance Monoid RoutePattern where
-  mappend (RoutePattern a) (RoutePattern b) = RoutePattern $ \r -> let (t1, r', p1) = a r in
-                                                                   let (t2, r'', p2) = b r' in
-                                                                     (t1 <> t2, r'', p1 <> p2)
-  mempty = RoutePattern $ \r -> ("", r, Partial [])
+  mappend (RoutePattern a) (RoutePattern b) = RoutePattern $ \r -> let (RoutePatternResult t1 r' p1) = a r in
+                                                                   let (RoutePatternResult t2 r'' p2) = b r' in
+                                                                     RoutePatternResult (t1 <> t2) r'' (p1 <> p2)
+  mempty = RoutePattern $ \r -> RoutePatternResult "" r $ Partial []
 
 instance IsString RoutePattern where
   fromString = capture . T.pack
@@ -69,7 +76,7 @@ path r = case front of
 capture :: Text -> RoutePattern
 capture pat = RoutePattern process
   where 
-    process req = (pat, req { pathInfo = ss }, res)
+    process req = RoutePatternResult pat (req { pathInfo = ss }) res
       where
         (res, ss) = go (T.split (== '/') pat) (T.split (== '/') $ path req) []
         go [] [] prs = (Complete prs, []) -- request string and pattern match!
@@ -84,7 +91,7 @@ capture pat = RoutePattern process
 
 type Param = (C.ByteString, C.ByteString)
 
-data BodySource = FileSource !(FilePath, Maybe FilePart)
+data BodySource = FileSource !FilePath !(Maybe FilePart)
                 | BuilderSource !Builder
                 | LBSSource !L.ByteString
                 | StreamSource !StreamingBody
@@ -129,7 +136,6 @@ instance MonadTransControl HandlerT where
       return $ StHandlerT $ case res of
         Left s -> Left s
         Right (x, s, _) -> Right (x, s)
-        
 
   restoreT mSt = HandlerT $ do
     (StHandlerT stof) <- lift $ lift $ mSt
@@ -163,4 +169,13 @@ instance MonadIO m => MonadIO (GrowlerT m) where
   liftIO = GrowlerT . liftIO
 
 type Growler = GrowlerT IO
+
+data JsonInputError = RequestBodyExhausted
+                    | JsonError DecodingError
+                    deriving (Show, Eq)
+
+data GrowlerConfig m = GrowlerConfig
+  { growlerConfigNotFoundHandler :: HandlerT m () -- ^ The 404 not found handler. If no route matches, then this handler will be evaluated.
+  , growlerConfigErrorHandler    :: HandlerT m () -- ^ The uncaught exception handler. If an exception is thrown and not caught while trying to service a request, then this handler will be evaluated.
+  }
 
