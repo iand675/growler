@@ -33,7 +33,13 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:   Web.Growler, Web.Growler.Handler, Web.Growler.Parsable, Web.Growler.Router, Web.Growler.Types
+  exposed-modules:     Web.Growler,
+                       Web.Growler.Handler,
+                       Web.Growler.Parsable,
+                       Web.Growler.Router,
+                       Web.Growler.Types,
+                       Web.Growler.EventSource
+
   other-extensions:    OverloadedStrings, FlexibleContexts, FlexibleInstances, LambdaCase, RankNTypes, ScopedTypeVariables
   build-depends:       base >=4.6 && <5,
                        lens >=4.5 && <5,
