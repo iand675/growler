@@ -127,8 +127,10 @@ deriving instance MonadIO m => MonadIO (HandlerT m)
 instance MonadBase b m => MonadBase b (HandlerT m) where
   liftBase = liftBaseDefault
 
+newtype StHandlerT a = StHandlerT { unStHandlerT :: Either ResponseState (a, ResponseState) }
+
 instance MonadTransControl HandlerT where
-  newtype StT HandlerT a = StHandlerT { unStHandlerT :: Either ResponseState (a, ResponseState) }
+  type StT HandlerT a = StHandlerT a
   liftWith f = do
     r <- HandlerT ask
     s <- HandlerT get
@@ -149,9 +151,9 @@ instance MonadTransControl HandlerT where
         return x
 
 instance MonadBaseControl b m => MonadBaseControl b (HandlerT m) where
-  newtype StM (HandlerT m) a = StMHandlerT { unStMHandlerT :: StM m (StT HandlerT a) }
-  liftBaseWith = defaultLiftBaseWith StMHandlerT
-  restoreM = defaultRestoreM unStMHandlerT
+  type StM (HandlerT m) a = ComposeSt HandlerT m a
+  liftBaseWith = defaultLiftBaseWith
+  restoreM = defaultRestoreM
 
 type Handler = HandlerT IO
 
