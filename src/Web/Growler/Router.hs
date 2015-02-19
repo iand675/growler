@@ -28,6 +28,7 @@ import           Control.Arrow              ((***))
 
 import           Control.Monad.State        hiding (get, put)
 import qualified Control.Monad.State        as S
+import           Control.Monad.State.Class  (modify')
 import           Control.Monad.Trans
 
 import qualified Data.ByteString.Char8      as B
