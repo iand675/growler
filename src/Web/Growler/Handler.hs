@@ -1,31 +1,32 @@
 {-# LANGUAGE Rank2Types        #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Web.Growler.Handler where
-import           Blaze.ByteString.Builder (Builder)
+import           Blaze.ByteString.Builder         (Builder)
 import           Control.Applicative
 import           Control.Lens
-import           Control.Monad.RWS
+import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Either
-import qualified Control.Monad.State as State
-import qualified Control.Monad.State.Strict as ST
-import           Data.Aeson                hiding ((.=))
-import qualified Data.ByteString.Char8     as C
-import qualified Data.ByteString.Lazy.Char8 as L
+import qualified Control.Monad.Trans.RWS.Strict   as RWS
+import qualified Control.Monad.Trans.State.Strict as ST
+import           Data.Aeson                       hiding ((.=))
+import qualified Data.ByteString.Char8            as C
+import qualified Data.ByteString.Lazy.Char8       as L
 import           Data.CaseInsensitive
 import           Data.Maybe
-import qualified Data.HashMap.Strict       as HM
-import           Data.Text as T
-import           Data.Text.Encoding as T
-import           Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TL
+import           Data.Monoid                      ((<>))
+import qualified Data.HashMap.Strict              as HM
+import           Data.Text                        as T
+import           Data.Text.Encoding               as T
+import           Data.Text.Lazy                   as TL
+import qualified Data.Text.Lazy.Encoding          as TL
 import           Network.HTTP.Types.Status
 import           Network.Wai
-import           Network.Wai.Parse hiding (Param)
+import           Network.Wai.Parse                hiding (Param)
 import           Network.HTTP.Types
 import           Web.Growler.Parsable
-import           Web.Growler.Types hiding (status, request, params)
-import qualified Web.Growler.Types as L
+import           Web.Growler.Types                hiding (status, request, params)
+import qualified Web.Growler.Types                as L
 import           Pipes.Wai
 import           Pipes.Aeson
 
@@ -33,7 +34,7 @@ initialState :: ResponseState
 initialState = ResponseState ok200 HM.empty (LBSSource "")
 
 currentResponse :: Monad m => HandlerT m ResponseState
-currentResponse = HandlerT State.get
+currentResponse = HandlerT RWS.get
 
 -- | End the handler early with an arbitrary 'ResponseState'. 
 abort :: Monad m => ResponseState -> HandlerT m ()
@@ -176,18 +177,18 @@ raise msg = do
 
 runHandler :: Monad m => ResponseState -> Maybe T.Text -> Request -> [Param] -> HandlerT m a -> m (Either ResponseState (a, ResponseState))
 runHandler rs pat rq ps m = runEitherT $ do
-  (dx, r, ()) <- runRWST (fromHandler m) (RequestState pat (qsParams ++ ps) rq) rs
+  (dx, r, ()) <- RWS.runRWST (fromHandler m) (RequestState pat (qsParams ++ ps) rq) rs
   return (dx, r)
   where
-    qsParams = fmap (_2 %~ fromMaybe "") (queryString rq) 
+    qsParams = fmap (_2 %~ fromMaybe "") (queryString rq)
 
 liftAround :: (Monad m) => (forall a. m a -> m a) -> HandlerT m a -> HandlerT m a
 liftAround f m = HandlerT $ do
-  (RequestState pat ps req) <- ask
-  currentState <- get
+  (RequestState pat ps req) <- RWS.ask
+  currentState <- RWS.get
   r <- lift $ lift $ f $ runHandler currentState pat req ps m
   case r of
     Left err -> lift $ left err
     Right (dx, state') -> do
-      put state'
-      return dx 
+      RWS.put state'
+      return dx

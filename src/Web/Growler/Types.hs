@@ -8,26 +8,26 @@
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE OverloadedStrings          #-}
 module Web.Growler.Types where
-import           Blaze.ByteString.Builder  (Builder)
+import           Blaze.ByteString.Builder         (Builder)
 import           Control.Applicative
 import           Control.Exception
 import           Control.Lens.TH
-import           Control.Monad.Base (MonadBase(..), liftBaseDefault)
-import           Control.Monad.Reader
-import           Control.Monad.RWS
-import           Control.Monad.State
+import           Control.Monad.Base               (MonadBase(..), liftBaseDefault)
+import           Control.Monad.Trans
+import           Control.Monad.Trans.RWS.Strict
+import           Control.Monad.Trans.State.Strict hiding (get, put)
 import           Control.Monad.Trans.Either
 import           Control.Monad.Trans.Control
-import           Data.Aeson                  hiding ((.=))
-import qualified Data.ByteString.Char8       as C
-import qualified Data.ByteString.Lazy        as L
-import qualified Data.CaseInsensitive        as CI
-import qualified Data.HashMap.Strict         as HM
+import           Data.Aeson                        hiding ((.=))
+import qualified Data.ByteString.Char8             as C
+import qualified Data.ByteString.Lazy              as L
+import qualified Data.CaseInsensitive              as CI
+import qualified Data.HashMap.Strict               as HM
 import           Data.Monoid
-import           Data.String                 (IsString (..))
-import           Data.Text                   (Text, pack)
-import qualified Data.Text                   as T
-import qualified Data.Text.Encoding          as T
+import           Data.String                       (IsString (..))
+import           Data.Text                         (Text, pack)
+import qualified Data.Text                         as T
+import qualified Data.Text.Encoding                as T
 import           Network.HTTP.Types.Header
 import           Network.HTTP.Types.Method
 import           Network.HTTP.Types.Status
@@ -76,7 +76,7 @@ path r = case front of
 
 capture :: Text -> RoutePattern
 capture pat = RoutePattern process
-  where 
+  where
     process req = RoutePatternResult pat (req { pathInfo = ss }) res
       where
         (res, ss) = go (T.split (== '/') pat) (T.split (== '/') $ path req) []

@@ -86,27 +86,27 @@ module Web.Growler
 , ResponseState (..)
 , RoutePattern (..)
 ) where
-import           Control.Exception         (catch)
-import           Control.Lens              hiding (get)
+import           Control.Exception                (catch)
+import           Control.Lens                     hiding (get)
 import           Control.Monad.Identity
-import           Control.Monad.State       hiding (get, put)
+import           Control.Monad.Trans.State.Strict hiding (get, put)
 import           Control.Monad.Trans
-import qualified Data.HashMap.Strict       as HM
+import qualified Data.HashMap.Strict              as HM
 import           Data.Maybe
-import qualified Data.Vector               as V
+import qualified Data.Vector                      as V
 import           Data.Vector.Lens
 import           Network.HTTP.Types.Method
 import           Network.Wai
-import qualified Network.Wai.Handler.Warp  as Warp
-import           Pipes.Aeson               (DecodingError (..))
+import qualified Network.Wai.Handler.Warp         as Warp
+import           Pipes.Aeson                      (DecodingError (..))
 import           Web.Growler.Handler
 import           Web.Growler.Parsable
 import           Web.Growler.Router
-import           Web.Growler.Types         hiding (status, headers, params, request, capture)
+import           Web.Growler.Types                hiding (status, headers, params, request, capture)
 
 -- | The simple approach to starting up a web server
 growl :: MonadIO m => (forall a. m a -> IO a) -- ^ A function to convert your base monad of choice into IO.
-                   -> GrowlerConfig m       
+                   -> GrowlerConfig m
                    -> GrowlerT m ()           -- ^ The router for all the other routes
                    -> IO ()
 growl trans fb g = do

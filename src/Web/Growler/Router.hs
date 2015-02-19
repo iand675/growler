@@ -24,31 +24,32 @@ module Web.Growler.Router
     , internalServerError
     ) where
 
-import           Control.Arrow              ((***))
+import           Control.Arrow                    ((***))
 
-import           Control.Monad.State        hiding (get, put)
-import qualified Control.Monad.State        as S
-import           Control.Monad.State.Class  (modify')
 import           Control.Monad.Trans
+import qualified Control.Monad.Trans.State.Strict as S
 
-import qualified Data.ByteString.Char8      as B
-import qualified Data.ByteString.Lazy.Char8 as BL
-import           Data.Maybe                 (fromMaybe)
-import           Data.Monoid                ((<>), mconcat)
-import           Data.String                (fromString)
-import qualified Data.Text                  as T
-import qualified Data.Text.Encoding         as T
-import qualified Data.Text.Lazy             as TL
+import qualified Data.ByteString.Char8            as B
+import qualified Data.ByteString.Lazy.Char8       as BL
+import           Data.Maybe                       (fromMaybe)
+import           Data.Monoid                      ((<>), mconcat)
+import           Data.String                      (fromString)
+import qualified Data.Text                        as T
+import qualified Data.Text.Encoding               as T
+import qualified Data.Text.Lazy                   as TL
 
 import           Network.HTTP.Types
-import           Network.Wai                (Request (..))
-import qualified Network.Wai.Parse          as Parse
+import           Network.Wai                      (Request (..))
+import qualified Network.Wai.Parse                as Parse
 
-import qualified Text.Regex                 as Regex
+import qualified Text.Regex                       as Regex
 
 import           Web.Growler.Handler
-import           Web.Growler.Types          hiding (status, capture)
+import           Web.Growler.Types                hiding (status, capture)
 
+-- TODO shim to add support for transformers 0.3. Get rid of it once
+-- Nix makes it easier to escape older transformers version.
+modify' f = S.get >>= (($!) S.put . f)
 
 mount :: Monad m => RoutePattern -> GrowlerT m () -> GrowlerT m ()
 mount pat m = GrowlerT $ do
@@ -111,7 +112,7 @@ internalServerError = status status500
 -- >>> curl http://localhost:3000/foo/something
 -- something
 addRoute :: (MonadIO m) => StdMethod -> RoutePattern -> HandlerT m () -> GrowlerT m ()
-addRoute method pat action = GrowlerT $ modify ((method, pat, action):)
+addRoute method pat action = GrowlerT $ modify' ((method, pat, action):)
 
 route :: Request -> StdMethod -> RoutePattern -> Maybe (T.Text, [Param])
 route req method pat = if Right method == parseMethod (requestMethod req)
